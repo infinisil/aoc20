@@ -29,14 +29,16 @@ rec {
   # Given a, b, c with 0 <= c < b
   # Returns first x that satisfies
   # a * x = b * y + c
+  # Or
+  # a * x =(modb) c
   r = a: b: c:
     let
-      c' = lib.mod c b;
       go = x: l:
-        if l == c' then x
-        else go (x + 1) (lib.mod (l + a) b);
-      result = go 0 0;
-    in builtins.seq (builtins.trace "Computing with (${toString a}, ${toString b}, ${toString c})" null) (builtins.trace "Got ${toString result}" result);
+        if l == c then builtins.trace "${toString a} * ${toString x} == ${toString l} == ${toString c} mod ${toString b}" x
+        else builtins.trace "${toString a} * ${toString x} == ${toString l} != ${toString c} mod ${toString b}" go (x + 1) (lib.mod (l + a) b);
+      x = go 0 0;
+      y = (a * x - c) / b;
+    in builtins.seq (builtins.trace "Computing the first x such that ${toString a} * x == ${toString b} * y + ${toString c}" null) (builtins.trace "Got x = ${toString x} and y = ${toString y}" (a * x));
 
   sequenceMatch = seq: match:
     let
@@ -48,14 +50,18 @@ rec {
       # seq.period * k = match.period * n - (seq.offset - match.offset)
       # a = seq.period, b = match.period, c = seq.offset - match.offset
 
-      res = r seq.period match.period (seq.period + match.offset - seq.offset);
+      diff = seq.period - seq.offset;
+
+      res = r seq.period match.period (lib.mod (match.offset + diff) match.period);
     in {
       period = newPeriod;
-      offset = (res - 1) * seq.period + seq.offset;
+      offset = res - diff;
     };
 
   inputSequences = lib.filter (s: s.period != null) (lib.imap0 (n: id: { period = id; offset = -n; }) input.ids);
 
   part2 = (lib.foldl' sequenceMatch initial (lib.tail inputSequences)).offset;
+
+  x = sequenceMatch { period = 17; offset = 0; } { period = 19; offset = -3; };
 
 }
