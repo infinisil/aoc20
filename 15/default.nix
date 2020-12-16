@@ -4,25 +4,29 @@ rec {
 
   #input = [ 16 11 15 0 1 7 ];
 
-  speak = state: n: let ns = toString n; in /*builtins.trace "[${toString (state.index + 1)}] Speaking ${ns}"*/ {
-    last = ns;
+  speak = state: n: /*builtins.trace "[${toString (state.index + 1)}] Speaking ${toString n}"*/ {
+    last = n;
     index = state.index + 1;
-    log = state.log // {
-      ${state.last} = state.index;
-    };
+    log = arr.set state.last state.index state.log;
   };
 
+  arr = import (fetchTarball {
+    url = "https://github.com/infinisil/fastnixarray/archive/fd6215d4cf1a46d8599233ffb530f748bb3df185.tar.gz";
+    sha256 = "0bjcyh56bms2za5gdx701871vha31qd07biz1z0ykh7gwlvlm6ay";
+  });
+
   initialState = lib.foldl' speak {
-    log = {};
-    last = null;
-    index = 0;
-  } input;
+    log = arr.emptyArray;
+    last = lib.head input;
+    index = 1;
+  } (lib.tail input);
 
   next = state:
-    let firstTime = ! state.log ? ${state.last};
-    in if firstTime then /*builtins.trace "${state.last} hasn't been spoken before, so we speak 0" */ 0
-    else let result = state.index - state.log.${state.last};
-    in /*builtins.trace "${state.last} has been spoken before at ${toString state.log.${state.last}}" */result;
+    let
+      value = arr.get state.last state.log;
+    in if builtins.isNull value then /*builtins.trace "${toString state.last} hasn't been spoken before, so we speak 0"*/ 0
+    else state.index - value;
+    #in /*builtins.trace "${toString state.last} has been spoken before at ${toString value}"*/ result;
 
   iterateUntil = cond: trans:
     let
@@ -33,19 +37,35 @@ rec {
       go = n: state:
         if cond state then state
         else builtins.trace
-          "Condition not successful yet after ${toString (n * 2 - 1)} iterations, going for another ${toString (n * 2)}"
+          "Condition not successful yet after ${toString (n - 1)} iterations, going for another ${toString n}"
           (go (n * 2) (iterateUntilN n state));
     in go 1;
 
-  part1 =
+  # input = [ 3 1 2 ];
+
+  input = [ 16 11 15 0 1 7 ];
+
+  p = 10000;
+
+  iterateN = n: trans: initial:
+    lib.foldl' (acc: i:
+      if lib.mod i p == 0 then builtins.trace "Progress: ${toString (i / p)}/${toString (n / p)}" (trans acc)
+      else trans acc
+    ) initial (lib.genList (i: i) n);
+
+  runFor = n:
     let
       trans = state:
         let
           toSpeak = next state;
           new = speak state toSpeak;
         in builtins.seq new.log new;
-      final = iterateUntil (state: builtins.trace state.index state.index >= 100000) trans initialState;
-    in lib.toInt final.last;
+      #final = iterateUntil (state: state.index >= n) trans initialState;
+      final = iterateN (n - initialState.index) trans initialState;
+    in final.last;
+
+  part1 = runFor 2020;
+  part2 = runFor 30000000;
 
 
   speak2 = state: n: [ n state ];
@@ -63,7 +83,6 @@ rec {
   #  in go 1 (builtins.elemAt state 1);
 
 
-  input = [ 16 11 15 0 1 7 ];
 
   initial2 = lib.foldl' (acc: el: [ el acc ]) null input;
 
